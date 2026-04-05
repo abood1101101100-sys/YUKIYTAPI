@@ -79,9 +79,11 @@ async def stream_music(request: Request, video_id: str, type: str = "audio", tok
             'format': 'bestaudio/best' if type == "audio" else 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': file_path,
             'quiet': True,
-            # 🔥 YT-DLP SYNTAX FIX: Changed list to dictionary format below
+            # 🔥 YT-DLP SYNTAX FIX: Dictionary format
             'js_runtimes': {'node': {}},
-            'cookiefile': COOKIES_FILE # <-- Cookies file yahan load ho rahi hai
+            # 🔥 YOUTUBE JS CHALLENGE BYPASS 🔥
+            'remote_components': ['ejs:github'],
+            'cookiefile': COOKIES_FILE 
         }
         if type == "audio":
             ydl_opts.update({
