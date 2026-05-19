@@ -112,20 +112,19 @@ def build_ytdlp_cmd(video_id: str, outtmpl: str, media_type: str):
     if NODE_AVAILABLE:
         cmd += ["--js-runtimes", "node"]
 
-    if media_type == "audio":
+if media_type == "audio":
 
-        cmd += [
-            "-f",
-            "bestaudio/best",
+    cmd += [
+        "-f",
+        "140/251/bestaudio",
 
-            "--extract-audio",
-            "--audio-format",
-            "mp3",
+        "--extract-audio",
+        "--audio-format",
+        "mp3",
 
-            "--audio-quality",
-            "0",
-        ]
-
+        "--audio-quality",
+        "0",
+    ]
     else:
 
         cmd += [
