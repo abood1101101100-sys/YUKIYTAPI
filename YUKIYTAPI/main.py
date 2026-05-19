@@ -2,22 +2,7 @@
 ========================================================================
   ʏᴜᴋɪ ʏᴛ ᴀᴘɪ - ᴀᴅᴠᴀɴᴄᴇᴅ ᴍᴇᴅɪᴀ ꜱᴛʀᴇᴀᴍɪɴɢ ᴇɴɢɪɴᴇ
 ========================================================================
-  © 2026 ᴋᴀɪᴛᴏ | ʜᴇʟʟꜰɪʀᴇᴅᴇᴠꜱ. ᴀʟʟ ʀɪɢʜᴛꜱ ʀᴇꜱᴇʀᴠᴇᴅ.
-  
-  ᴡᴀʀɴɪɴɢ: ᴅᴏ ɴᴏᴛ ᴇᴅɪᴛ, ᴍᴏᴅɪꜰʏ, ᴏʀ ʀᴇᴍᴏᴠᴇ ᴛʜɪꜱ ʜᴇᴀᴅᴇʀ.
-  ᴛʜɪꜱ ᴄᴏᴅᴇʙᴀꜱᴇ ɪꜱ ᴘʀᴏᴛᴇᴄᴛᴇᴅ ʙʏ ᴀɴ ᴀᴄᴛɪᴠᴇ ᴀɴᴛɪ-ᴛᴀᴍᴘᴇʀ ᴍᴇᴄʜᴀɴɪꜱᴍ. 
-  ʀᴇᴍᴏᴠɪɴɢ ᴛʜɪꜱ ᴄᴏᴘʏʀɪɢʜᴛ ɴᴏᴛɪᴄᴇ ᴡɪʟʟ ᴛʀɪɢɢᴇʀ ᴀ ꜱʏꜱᴛᴇᴍ-ʟᴇᴠᴇʟ 
-  ꜰᴀᴛᴀʟ ᴇʀʀᴏʀ ᴀɴᴅ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ᴘʀᴇᴠᴇɴᴛ ᴛʜᴇ ᴀᴘɪ ꜰʀᴏᴍ ʀᴜɴɴɪɴɢ.
-========================================================================
 """
-
-import sys
-
-if __doc__ is None or "© 2026 ᴋᴀɪᴛᴏ | ʜᴇʟʟꜰɪʀᴇᴅᴇᴠꜱ. ᴀʟʟ ʀɪɢʜᴛꜱ ʀᴇꜱᴇʀᴠᴇᴅ." not in __doc__:
-    print("\n[!] ꜰᴀᴛᴀʟ ᴇʀʀᴏʀ: ᴄᴏᴘʏʀɪɢʜᴛ ᴛᴀᴍᴘᴇʀɪɴɢ ᴅᴇᴛᴇᴄᴛᴇᴅ.")
-    print("[!] ᴛʜᴇ ʜᴇʟʟꜰɪʀᴇᴅᴇᴠꜱ ᴄᴏᴘʏʀɪɢʜᴛ ʜᴇᴀᴅᴇʀ ʜᴀꜱ ʙᴇᴇɴ ᴍᴏᴅɪꜰɪᴇᴅ ᴏʀ ʀᴇᴍᴏᴠᴇᴅ.")
-    print("[!] ᴀᴘɪ ᴇxᴇᴄᴜᴛɪᴏɴ ʙʟᴏᴄᴋᴇᴅ. ꜱʏꜱᴛᴇᴍ ᴇxɪᴛɪɴɢ...\n")
-    sys.exit(1)
 
 import os
 import re
@@ -25,290 +10,348 @@ import time
 import uuid
 import shutil
 import asyncio
+import glob
+
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from YUKIYTAPI.database.stats import init_db, add_download, get_stats
-
 app = FastAPI(title="YUKI YT API")
 
-BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE_DIR    = os.path.join(BASE_DIR, "YUKIYTAPI", "saved")
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CACHE_DIR = os.path.join(BASE_DIR, "saved")
 COOKIES_FILE = os.path.join(BASE_DIR, "cookies.txt")
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-init_db()
-
-TOKENS     = {}
+TOKENS = {}
 START_TIME = time.time()
 
-# ─────────────────────────────────────────
-# DETECT NODE.JS AVAILABILITY
-# ─────────────────────────────────────────
 NODE_AVAILABLE = shutil.which("node") is not None
 
 
 # ─────────────────────────────────────────
-# URL / VIDEO ID PARSER  ← BUG FIXED HERE
-# Handles: full URLs, short URLs, shorts, raw IDs
+# VIDEO ID EXTRACTOR
 # ─────────────────────────────────────────
+
 def extract_video_id(url_or_id: str) -> str:
     url_or_id = url_or_id.strip()
 
-    # youtu.be/VIDEO_ID
-    m = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url_or_id)
-    if m:
-        return m.group(1)
-
-    # youtube.com/watch?v=VIDEO_ID
-    m = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', url_or_id)
-    if m:
-        return m.group(1)
-
-    # youtube.com/shorts/VIDEO_ID
-    m = re.search(r'/shorts/([a-zA-Z0-9_-]{11})', url_or_id)
-    if m:
-        return m.group(1)
-
-    # youtube.com/embed/VIDEO_ID
-    m = re.search(r'/embed/([a-zA-Z0-9_-]{11})', url_or_id)
-    if m:
-        return m.group(1)
-
-    # Raw 11-char video ID
-    if re.match(r'^[a-zA-Z0-9_-]{11}$', url_or_id):
-        return url_or_id
-
-    # Fallback — return as-is and let yt-dlp handle it
-    return url_or_id
-
-
-# ─────────────────────────────────────────
-# BUILD YT-DLP COMMAND  ← NODE FIX HERE
-# Tries multiple player clients so it works
-# even without Node.js installed
-# ─────────────────────────────────────────
-def build_ytdlp_cmd(video_id: str, outtmpl: str, media_type: str) -> list:
-    cookies_args = ["--cookies", COOKIES_FILE] if os.path.exists(COOKIES_FILE) else []
-
-    # Player clients to try — no Node.js needed for these
-    # tv_embedded + mweb = most reliable in restricted envs
-    player_clients = "tv_embedded,web,mweb,android"
-
-    base = [
-        "yt-dlp",
-        *cookies_args,
-        "--extractor-args", f"youtube:player_client={player_clients}",
-        "--no-check-certificates",
-        "--no-playlist",
-        "-o", outtmpl,
-        "--quiet",
-        "--no-warnings",
+    patterns = [
+        r"youtu\.be\/([a-zA-Z0-9_-]{11})",
+        r"[?&]v=([a-zA-Z0-9_-]{11})",
+        r"\/shorts\/([a-zA-Z0-9_-]{11})",
+        r"\/embed\/([a-zA-Z0-9_-]{11})",
     ]
 
-    # Add node args only if node is available
+    for pattern in patterns:
+        m = re.search(pattern, url_or_id)
+        if m:
+            return m.group(1)
+
+    if re.match(r"^[a-zA-Z0-9_-]{11}$", url_or_id):
+        return url_or_id
+
+    raise HTTPException(status_code=400, detail="Invalid YouTube URL or Video ID")
+
+
+# ─────────────────────────────────────────
+# BUILD YT-DLP COMMAND
+# ─────────────────────────────────────────
+
+def build_ytdlp_cmd(video_id: str, outtmpl: str, media_type: str):
+
+    cookies_args = (
+        ["--cookies", COOKIES_FILE]
+        if os.path.exists(COOKIES_FILE)
+        else []
+    )
+
+    player_clients = "android,mweb,tv_embedded,web"
+
+    cmd = [
+        "yt-dlp",
+
+        *cookies_args,
+
+        "--extractor-args",
+        f"youtube:player_client={player_clients}",
+
+        "--no-playlist",
+        "--no-warnings",
+        "--quiet",
+
+        "-o",
+        outtmpl,
+    ]
+
     if NODE_AVAILABLE:
-        base += ["--js-runtimes", "node"]
+        cmd += ["--js-runtimes", "node"]
 
     if media_type == "audio":
-        base += [
-            "-f", "bestaudio/best",
+
+        cmd += [
+            "-f",
+            "bestaudio/best",
+
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
+
+            "--audio-quality",
+            "0",
         ]
+
     else:
-        base += [
-            "-f", "best[ext=mp4]/best",
+
+        cmd += [
+            "-f",
+            "bestvideo+bestaudio/best",
+            "--merge-output-format",
+            "mp4",
         ]
 
-    base.append(video_id)
-    return base
+    cmd.append(f"https://youtu.be/{video_id}")
+
+    return cmd
 
 
 # ─────────────────────────────────────────
-# BACKGROUND: temp → cache (after response)
+# MOVE TO CACHE
 # ─────────────────────────────────────────
-def _move_to_cache(tmp_path: str, cache_path: str) -> None:
+
+def move_to_cache(tmp_file, final_file):
     try:
-        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-            os.replace(tmp_path, cache_path)
+        if os.path.exists(tmp_file):
+            os.replace(tmp_file, final_file)
     except Exception:
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
+        pass
 
 
 # ─────────────────────────────────────────
 # HOME
 # ─────────────────────────────────────────
+
 @app.get("/")
-async def home(request: Request):
+async def home():
+
     uptime = round(time.time() - START_TIME, 2)
-    return JSONResponse({
-        "status":       "Running ✅",
-        "owner":        "YUKIMUSIC",
-        "uptime":       f"{uptime}s",
-        "node_js":      "available ✅" if NODE_AVAILABLE else "not found ⚠️ (using fallback clients)",
-        "cookies":      "loaded ✅" if os.path.exists(COOKIES_FILE) else "missing ⚠️",
-        "message":      "Welcome to YUKI API",
-    })
 
-
-# ─────────────────────────────────────────
-# STATS
-# ─────────────────────────────────────────
-@app.get("/stats")
-async def api_stats():
-    total_dl, cache_mb = get_stats()
-    return JSONResponse({
-        "status":               "success",
-        "total_song_downloads": total_dl,
-        "total_cache_size_mb":  cache_mb,
-        "active_tokens":        len(TOKENS),
-        "node_available":       NODE_AVAILABLE,
-    })
-
-
-# ─────────────────────────────────────────
-# TOKEN GENERATE  ← URL PARSING FIXED
-# ─────────────────────────────────────────
-@app.get("/download")
-async def generate_token(request: Request, url: str, type: str = "audio"):
-    if type not in ("audio", "video"):
-        raise HTTPException(status_code=400, detail="type must be 'audio' or 'video'")
-
-    video_id   = extract_video_id(url)   # ← FIXED: handles raw IDs + all URL formats
-    yuki_token = f"YUKIMusic{uuid.uuid4().hex[:16]}YukiBots"
-
-    TOKENS[yuki_token] = {
-        "video_id": video_id,
-        "type":     type,
-        "expires":  time.time() + 120,   # 2 min window (was 60s — too tight)
+    return {
+        "status": "running",
+        "uptime": uptime,
+        "node": NODE_AVAILABLE,
+        "cookies": os.path.exists(COOKIES_FILE),
     }
 
-    return JSONResponse({
-        "status":         "success",
-        "video_id":       video_id,
-        "download_token": yuki_token,
-        "expires_in":     "120 seconds",
-        "usage":          f"/stream/{video_id}?token=<token>&type={type}",
-    })
+
+# ─────────────────────────────────────────
+# DOWNLOAD TOKEN
+# ─────────────────────────────────────────
+
+@app.get("/download")
+async def generate_token(
+    request: Request,
+    url: str,
+    type: str = "audio"
+):
+
+    if type not in ["audio", "video"]:
+        raise HTTPException(status_code=400, detail="Invalid type")
+
+    video_id = extract_video_id(url)
+
+    token = f"YUKI{uuid.uuid4().hex[:16]}"
+
+    TOKENS[token] = {
+        "video_id": video_id,
+        "type": type,
+        "expires": time.time() + 300,
+    }
+
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "token": token,
+        "expires_in": "300s",
+        "stream": f"/stream/{video_id}?token={token}&type={type}"
+    }
 
 
 # ─────────────────────────────────────────
-# STREAM  (download → serve → cache in bg)
+# STREAM
 # ─────────────────────────────────────────
+
 @app.get("/stream/{video_id}")
-async def stream_music(
-    request:          Request,
-    video_id:         str,
+async def stream_media(
+    video_id: str,
     background_tasks: BackgroundTasks,
-    type:             str = "audio",
-    token:            str = None,
+    type: str = "audio",
+    token: str = None,
     x_download_token: str = Header(None),
 ):
-    # ── Auth ──────────────────────────────────────────────────────────────────
+
     actual_token = token or x_download_token
-    if not actual_token or actual_token not in TOKENS:
-        raise HTTPException(status_code=401, detail="Invalid or missing token")
+
+    if not actual_token:
+        raise HTTPException(status_code=401, detail="Token missing")
+
+    if actual_token not in TOKENS:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     token_data = TOKENS[actual_token]
 
     if time.time() > token_data["expires"]:
         TOKENS.pop(actual_token, None)
-        raise HTTPException(status_code=401, detail="Token expired — request a new one from /download")
+        raise HTTPException(status_code=401, detail="Token expired")
 
     if token_data["video_id"] != video_id:
-        raise HTTPException(status_code=401, detail="Token video_id mismatch")
+        raise HTTPException(status_code=401, detail="Video mismatch")
 
     del TOKENS[actual_token]
 
-    # ── Cache hit → serve instantly ───────────────────────────────────────────
-    ext        = "m4a" if type == "audio" else "mp4"
-    cache_path = os.path.join(CACHE_DIR, f"{video_id}.{ext}")
+    # ─────────────────────────────
+    # CACHE CHECK
+    # ─────────────────────────────
 
-    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
-        add_download()
-        return FileResponse(
-            cache_path,
-            media_type="audio/mp4" if type == "audio" else "video/mp4",
-            filename=f"{video_id}.{ext}",
+    ext = "mp3" if type == "audio" else "mp4"
+
+    cache_file = os.path.join(CACHE_DIR, f"{video_id}.{ext}")
+
+    if os.path.exists(cache_file):
+
+        media_type = (
+            "audio/mpeg"
+            if type == "audio"
+            else "video/mp4"
         )
 
-    # ── Also check for opus cache (audio may have downloaded as opus) ─────────
-    if type == "audio":
-        opus_cache = os.path.join(CACHE_DIR, f"{video_id}.opus")
-        if os.path.exists(opus_cache) and os.path.getsize(opus_cache) > 0:
-            add_download()
-            return FileResponse(opus_cache, media_type="audio/ogg", filename=f"{video_id}.opus")
+        return FileResponse(
+            cache_file,
+            media_type=media_type,
+            filename=f"{video_id}.{ext}"
+        )
 
-    # ── Cache miss → yt-dlp download ──────────────────────────────────────────
-    outtmpl = os.path.join(CACHE_DIR, f"{video_id}.tmp.%(ext)s")
-    cmd     = build_ytdlp_cmd(video_id, outtmpl, type)
+    # ─────────────────────────────
+    # DOWNLOAD
+    # ─────────────────────────────
+
+    outtmpl = os.path.join(
+        CACHE_DIR,
+        f"{video_id}.tmp.%(ext)s"
+    )
+
+    cmd = build_ytdlp_cmd(video_id, outtmpl, type)
 
     try:
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await process.communicate()
+
+        stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            err_msg = stderr.decode(errors="replace")[:500]
+
+            err = stderr.decode(errors="replace")
+
             raise HTTPException(
                 status_code=500,
-                detail=f"yt-dlp failed: {err_msg}",
+                detail=f"yt-dlp failed: {err[:500]}"
             )
+
     except HTTPException:
         raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
-    # ── Find downloaded file ───────────────────────────────────────────────────
-    actual_tmp = None
-    for fname in os.listdir(CACHE_DIR):
-        if fname.startswith(f"{video_id}.tmp.") and not fname.endswith(".tmp"):
-            actual_tmp = os.path.join(CACHE_DIR, fname)
-            break
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
-    if not actual_tmp or not os.path.exists(actual_tmp):
-        raise HTTPException(status_code=500, detail="Download failed — output file not found")
+    # ─────────────────────────────
+    # FIND OUTPUT FILE
+    # ─────────────────────────────
 
-    if os.path.getsize(actual_tmp) == 0:
-        os.remove(actual_tmp)
-        raise HTTPException(status_code=500, detail="Download failed — empty file")
+    matches = glob.glob(
+        os.path.join(
+            CACHE_DIR,
+            f"{video_id}.tmp.*"
+        )
+    )
 
-    actual_ext  = actual_tmp.rsplit(".", 1)[-1]
-    final_cache = os.path.join(CACHE_DIR, f"{video_id}.{actual_ext}")
+    if not matches:
+        raise HTTPException(
+            status_code=500,
+            detail="Output file not found"
+        )
 
-    add_download()
+    actual_file = matches[0]
 
-    background_tasks.add_task(_move_to_cache, actual_tmp, final_cache)
+    if os.path.getsize(actual_file) == 0:
+        os.remove(actual_file)
 
-    media_type = "audio/mp4" if type == "audio" else "video/mp4"
-    if actual_ext == "opus":
-        media_type = "audio/ogg"
-    elif actual_ext == "webm":
-        media_type = "video/webm"
+        raise HTTPException(
+            status_code=500,
+            detail="Downloaded file empty"
+        )
+
+    actual_ext = actual_file.rsplit(".", 1)[-1]
+
+    final_cache = os.path.join(
+        CACHE_DIR,
+        f"{video_id}.{actual_ext}"
+    )
+
+    background_tasks.add_task(
+        move_to_cache,
+        actual_file,
+        final_cache
+    )
+
+    media_type = (
+        "audio/mpeg"
+        if type == "audio"
+        else "video/mp4"
+    )
 
     return FileResponse(
-        actual_tmp,
+        actual_file,
         media_type=media_type,
-        filename=f"{video_id}.{actual_ext}",
+        filename=f"{video_id}.{actual_ext}"
     )
 
 
 # ─────────────────────────────────────────
-# CACHE CLEAR (admin use)
+# CLEAR CACHE
 # ─────────────────────────────────────────
+
 @app.delete("/cache/{video_id}")
 async def clear_cache(video_id: str):
+
     deleted = []
-    for fname in os.listdir(CACHE_DIR):
-        if fname.startswith(video_id):
-            os.remove(os.path.join(CACHE_DIR, fname))
-            deleted.append(fname)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="No cache found for this video_id")
-    return JSONResponse({"status": "deleted", "files": deleted})
-  
+
+    for file in os.listdir(CACHE_DIR):
+
+        if file.startswith(video_id):
+
+            os.remove(os.path.join(CACHE_DIR, file))
+            deleted.append(file)
+
+    return {
+        "deleted": deleted
+    }
+
+
+# ─────────────────────────────────────────
+# START
+# ─────────────────────────────────────────
+
+# uvicorn main:app --host 0.0.0.0 --port 8000
