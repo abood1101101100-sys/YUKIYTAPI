@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Run the API
+# Rn the API
 CMD ["uvicorn", "YUKIYTAPI.main:app", "--host", "0.0.0.0", "--port", "8000"]
