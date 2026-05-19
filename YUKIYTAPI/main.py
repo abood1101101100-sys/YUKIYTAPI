@@ -24,11 +24,6 @@ app = FastAPI(title="YUKI YT API")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Auto-detect project root
-# Works in:
-# /app/main.py
-# /app/YUKIYTAPI/main.py
-# Docker / Coolify / local setups
-
 if os.path.basename(BASE_DIR).lower() == "yukiytapi":
     PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 else:
@@ -40,7 +35,7 @@ CACHE_DIR = os.path.join(PROJECT_ROOT, "saved")
 # Cookies file
 COOKIES_FILE = os.path.join(PROJECT_ROOT, "cookies.txt")
 
-# Create cache dir if missing
+# Create cache dir
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Runtime storage
@@ -57,6 +52,11 @@ print(f"[YUKI] CACHE_DIR     => {CACHE_DIR}")
 print(f"[YUKI] COOKIES_FILE  => {COOKIES_FILE}")
 print(f"[YUKI] Cookies Found => {os.path.exists(COOKIES_FILE)}")
 print(f"[YUKI] Node.js       => {NODE_AVAILABLE}")
+
+
+# ─────────────────────────────────────────
+# VIDEO ID EXTRACTOR
+# ─────────────────────────────────────────
 
 def extract_video_id(url_or_id: str) -> str:
     url_or_id = url_or_id.strip()
@@ -76,7 +76,10 @@ def extract_video_id(url_or_id: str) -> str:
     if re.match(r"^[a-zA-Z0-9_-]{11}$", url_or_id):
         return url_or_id
 
-    raise HTTPException(status_code=400, detail="Invalid YouTube URL or Video ID")
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid YouTube URL or Video ID"
+    )
 
 
 # ─────────────────────────────────────────
@@ -109,31 +112,41 @@ def build_ytdlp_cmd(video_id: str, outtmpl: str, media_type: str):
         outtmpl,
     ]
 
+    # Enable Node.js runtime if available
     if NODE_AVAILABLE:
         cmd += ["--js-runtimes", "node"]
 
-if media_type == "audio":
+    # ─────────────────────────────
+    # AUDIO
+    # ─────────────────────────────
+    if media_type == "audio":
 
-    cmd += [
-        "-f",
-        "140/251/bestaudio",
+        cmd += [
+            "-f",
+            "140/251/bestaudio",
 
-        "--extract-audio",
-        "--audio-format",
-        "mp3",
+            "--extract-audio",
+            "--audio-format",
+            "mp3",
 
-        "--audio-quality",
-        "0",
-    ]
+            "--audio-quality",
+            "0",
+        ]
+
+    # ─────────────────────────────
+    # VIDEO
+    # ─────────────────────────────
     else:
 
         cmd += [
             "-f",
             "bestvideo+bestaudio/best",
+
             "--merge-output-format",
             "mp4",
         ]
 
+    # Final URL
     cmd.append(f"https://youtu.be/{video_id}")
 
     return cmd
@@ -180,7 +193,10 @@ async def generate_token(
 ):
 
     if type not in ["audio", "video"]:
-        raise HTTPException(status_code=400, detail="Invalid type")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid type"
+        )
 
     video_id = extract_video_id(url)
 
@@ -216,21 +232,36 @@ async def stream_media(
 
     actual_token = token or x_download_token
 
+    # Token checks
     if not actual_token:
-        raise HTTPException(status_code=401, detail="Token missing")
+        raise HTTPException(
+            status_code=401,
+            detail="Token missing"
+        )
 
     if actual_token not in TOKENS:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
 
     token_data = TOKENS[actual_token]
 
     if time.time() > token_data["expires"]:
         TOKENS.pop(actual_token, None)
-        raise HTTPException(status_code=401, detail="Token expired")
+
+        raise HTTPException(
+            status_code=401,
+            detail="Token expired"
+        )
 
     if token_data["video_id"] != video_id:
-        raise HTTPException(status_code=401, detail="Video mismatch")
+        raise HTTPException(
+            status_code=401,
+            detail="Video mismatch"
+        )
 
+    # One-time token
     del TOKENS[actual_token]
 
     # ─────────────────────────────
@@ -239,7 +270,10 @@ async def stream_media(
 
     ext = "mp3" if type == "audio" else "mp4"
 
-    cache_file = os.path.join(CACHE_DIR, f"{video_id}.{ext}")
+    cache_file = os.path.join(
+        CACHE_DIR,
+        f"{video_id}.{ext}"
+    )
 
     if os.path.exists(cache_file):
 
@@ -264,7 +298,11 @@ async def stream_media(
         f"{video_id}.tmp.%(ext)s"
     )
 
-    cmd = build_ytdlp_cmd(video_id, outtmpl, type)
+    cmd = build_ytdlp_cmd(
+        video_id,
+        outtmpl,
+        type
+    )
 
     try:
 
@@ -315,6 +353,7 @@ async def stream_media(
     actual_file = matches[0]
 
     if os.path.getsize(actual_file) == 0:
+
         os.remove(actual_file)
 
         raise HTTPException(
@@ -361,7 +400,10 @@ async def clear_cache(video_id: str):
 
         if file.startswith(video_id):
 
-            os.remove(os.path.join(CACHE_DIR, file))
+            os.remove(
+                os.path.join(CACHE_DIR, file)
+            )
+
             deleted.append(file)
 
     return {
